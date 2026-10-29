@@ -97,6 +97,22 @@ Prefer the terminal? Run the same steps with:
 | Open Spotify | `o` |
 | Close the panel | `Esc` |
 
+### Open the panel from anywhere
+
+Segue doesn't add a system-wide shortcut, so it can't clash with yours. To
+open the player with a key from any window, add a line to
+`~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + CTRL + M", "Segue", "omarchy-shell io.github.steveb98.segue toggle")
+```
+
+Use any free combination: press **Super + K** to see the shortcuts already in
+use. The same command also takes `open` and `close` instead of `toggle`.
+
+Your keyboard's media keys (play/pause, next, previous) already control
+Spotify through Omarchy, so there's nothing to set up for those.
+
 ## Settings
 
 Two settings can be added to the widget's entry in `~/.config/omarchy/shell.json`:

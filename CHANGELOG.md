@@ -5,6 +5,7 @@
 - Bar label: hovering now fades to the artist even on self-titled tracks,
   where the title and artist are the same text.
 - Preview image: the "g" in Segue is no longer cut off.
+- README: how to bind a key that opens the panel from anywhere.
 
 ## 1.2.0 (2026-10-29)
 
