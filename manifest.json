@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.steveb98.segue",
   "name": "Segue",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "Steve B",
   "license": "MIT",
   "description": "Spotify in your Omarchy bar, with one-click switching between your laptop, phone, speakers and TV. Cover art, seek bar, artist on hover and a guided setup.",
