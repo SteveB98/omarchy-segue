@@ -25,7 +25,7 @@ Spotify yet, install it from the Omarchy menu: press **Super + Space**, then
    [Omarchy plugin marketplace](https://omarchyplugins.com) or with:
 
    ```bash
-   omarchy plugin add https://github.com/SteveB98/omarchy-spotify --enable
+   omarchy plugin add https://github.com/SteveB98/omarchy-segue --enable
    ```
 
 2. Restart the bar so it loads the new plugin:
