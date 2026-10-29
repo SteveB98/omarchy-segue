@@ -15,15 +15,12 @@ move playback to your phone, speakers or TV with Spotify Connect.
 
 ## Quick start
 
-You need **Omarchy 4** and the **Spotify desktop app**. If you don't have it yet,
-install either one:
+You need **Omarchy 4** and the **Spotify desktop app**. If you don't have
+Spotify yet, install it from the Omarchy menu: press **Super + Space**, then
+**Install → Service → Spotify**. (The `spotify-launcher` package works too.)
 
-```bash
-omarchy pkg add spotify-launcher     # official Arch package
-omarchy pkg aur add spotify          # or the AUR package
-```
-
-1. Install and turn on the plugin:
+1. Install and turn on the plugin, either from the
+   [Omarchy plugin marketplace](https://omarchyplugins.com) or with:
 
    ```bash
    omarchy plugin add https://github.com/SteveB98/omarchy-spotify --enable
@@ -54,7 +51,7 @@ its official API, and each person has to register a free "developer app" on
 their own account to use it. Nothing gets published and nobody else can see
 it. It takes about 2 minutes, and the plugin walks you through it.
 
-![The panel before setup, with the "Set up Spotify Connect" button](docs/setup.png)
+![The panel before setup, with the "Set up Spotify Connect" button](docs/first-run.png)
 
 1. Click the widget, click **Connect devices**, then **Set up Spotify Connect**.
    A terminal window opens with the steps.
@@ -77,7 +74,7 @@ saved in your system keyring and renews itself.
 Prefer the terminal? Run the same steps with:
 
 ```bash
-~/.config/omarchy/plugins/steveb.spotify/spotify-connect setup
+~/.config/omarchy/plugins/io.github.steveb98.spotify/spotify-connect setup
 ```
 
 ## Controls
@@ -103,7 +100,7 @@ Prefer the terminal? Run the same steps with:
 Two settings can be added to the widget's entry in `~/.config/omarchy/shell.json`:
 
 ```json
-{ "id": "steveb.spotify", "maxLabelWidth": 220, "brandColor": true }
+{ "id": "io.github.steveb98.spotify", "maxLabelWidth": 220, "brandColor": true }
 ```
 
 | Setting | Default | What it does |
@@ -112,13 +109,13 @@ Two settings can be added to the widget's entry in `~/.config/omarchy/shell.json
 | `brandColor` | `true` | Spotify green for the icon and progress bar while playing. Set to `false` to use your theme's colors. |
 
 To move the widget, drag it along the bar, or run
-`omarchy bar move steveb.spotify --section left` (or `center`).
+`omarchy bar move io.github.steveb98.spotify --section left` (or `center`).
 
 ## Troubleshooting
 
 **The widget doesn't show up after installing.**
 Run `omarchy restart shell`. The bar only picks up new plugins after a restart.
-If it's still missing, run `omarchy plugin enable steveb.spotify`.
+If it's still missing, run `omarchy plugin enable io.github.steveb98.spotify`.
 
 **The widget only shows a dim Spotify icon.**
 Spotify isn't running. Right-click the icon to open it.
@@ -131,7 +128,8 @@ Run `spotify` in a terminal. If you see `GPU process isn't usable. Goodbye.`,
 that's a Spotify problem, not this plugin. Tell Spotify to start with
 `--disable-gpu-sandbox`:
 
-- **AUR `spotify` package:** add this line to `~/.config/spotify-flags.conf`
+- **`spotify` package** (what Omarchy's installer uses): add this line to
+  `~/.config/spotify-flags.conf`
   (create the file if it doesn't exist):
 
   ```
@@ -174,21 +172,41 @@ paste the same Client ID.
 ## Privacy and security
 
 - The Spotify login (a refresh token) is stored in your system keyring through
-  `secret-tool`, never in a plain file. The short-lived access token is kept in
-  memory-backed `$XDG_RUNTIME_DIR` and is gone after a reboot.
+  `secret-tool`, never in a plain file. The short-lived access token is cached
+  in an owner-only folder in memory-backed `$XDG_RUNTIME_DIR` and is gone after
+  a reboot.
+- Tokens are never passed on a command line, so other accounts on the same
+  computer can't read them from the process list.
+- The one-time login page only listens on `127.0.0.1` (this computer) and only
+  accepts Spotify's redirect for the login you started.
 - The only network requests go to Spotify (`accounts.spotify.com` and
   `api.spotify.com`), and only while the panel is open or when you switch devices.
 - The plugin asks for two permissions: reading playback state and controlling
   playback. It can't see your playlists, library or account details.
 - Like every Omarchy plugin, this runs as unsandboxed code in the Omarchy shell.
   It's three files (`BarWidget.qml`, `spotify-connect`, `manifest.json`), so
-  it's quick to read before you enable it.
+  it's quick to read before you enable it. It never asks for admin rights, never
+  installs packages, and never edits your configuration files.
+
+## Dependencies
+
+Everything below ships with a standard Omarchy install, so there's nothing
+extra to install:
+
+| Used for | Tools |
+|---|---|
+| The widget | Omarchy shell (Quickshell), Hyprland (`hyprctl`), `jq` |
+| Spotify Connect | `curl`, `jq`, `secret-tool` (libsecret), `python3`, `openssl`, `basenc` (coreutils), `xdg-open` (xdg-utils) |
+| Setup conveniences | `wl-copy` (copies the redirect URI), `gum` (styled text); both optional |
+
+Spotify Connect also needs a Spotify Premium account and a free Spotify
+developer app (the setup walks you through creating it).
 
 ## Uninstall
 
 ```bash
-~/.config/omarchy/plugins/steveb.spotify/spotify-connect logout   # if you set up Connect
-omarchy plugin remove steveb.spotify
+~/.config/omarchy/plugins/io.github.steveb98.spotify/spotify-connect logout   # if you set up Connect
+omarchy plugin remove io.github.steveb98.spotify
 ```
 
 You can also delete the developer app from the
@@ -204,7 +222,7 @@ You can also delete the developer app from the
   via the small `spotify-connect` script (bash, `curl` and `jq`). Login uses the
   PKCE flow, so there's no client secret to store.
 
-Tested on Omarchy 4.0.4. The panel is built from Omarchy's own UI components,
+Tested on Omarchy 4.0.4 and 4.0.6. The panel is built from Omarchy's own UI components,
 so a future Omarchy update could need a plugin update.
 
 ## License

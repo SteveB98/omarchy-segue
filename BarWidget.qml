@@ -14,8 +14,8 @@ import qs.Ui
 // loudest and this widget should only ever drive Spotify.
 Panel {
   id: root
-  moduleName: "steveb.spotify"
-  ipcTarget: "steveb.spotify"
+  moduleName: "io.github.steveb98.spotify"
+  ipcTarget: "io.github.steveb98.spotify"
 
   readonly property bool vertical: bar ? bar.vertical : false
   readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
@@ -47,7 +47,12 @@ Panel {
   readonly property string title: running ? (player.trackTitle || "") : ""
   readonly property string artist: running ? (player.trackArtist || "") : ""
   readonly property string album: running ? (player.trackAlbum || "") : ""
-  readonly property string artUrl: running ? (player.trackArtUrl || "") : ""
+  // Any app can publish MPRIS metadata, so only load cover art over https
+  // (Spotify's own CDN) or from a local file, never plain http or other schemes.
+  readonly property string artUrl: {
+    var u = running ? String(player.trackArtUrl || "") : ""
+    return /^(https|file):\/\//i.test(u) ? u : ""
+  }
   readonly property bool hasTrack: title !== "" || artist !== ""
   readonly property real length: running && player.lengthSupported ? player.length : 0
   readonly property real position: running && player.positionSupported ? player.position : 0

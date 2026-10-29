@@ -1,5 +1,5 @@
 #!/bin/bash
-# Spotify Connect bridge for the steveb.spotify bar widget.
+# Spotify Connect bridge for the io.github.steveb98.spotify bar widget.
 #
 #   spotify-connect setup               guided first-run (creates the app, logs in)
 #   spotify-connect login <client-id>   one-time: authorize in the browser
@@ -12,10 +12,15 @@
 # Premium account, with redirect URI http://127.0.0.1:8898/callback and the
 # Web API enabled. PKCE flow: there is no client secret.
 #
-# Keyring entries (GNOME keyring via secret-tool):
+# Keyring entries (GNOME keyring via secret-tool). The account names predate
+# the plugin's current id and are kept so existing logins keep working:
 #   service spotify account steveb.spotify.client-id   the app's Client ID
 #   service spotify account steveb.spotify             the refresh token
-# The short-lived access token is cached in $XDG_RUNTIME_DIR (RAM, 0600).
+# The short-lived access token is cached in an owner-only directory under
+# $XDG_RUNTIME_DIR (RAM), or ~/.cache if that's unavailable.
+#
+# Secrets never appear in a command line: other local users can read process
+# arguments through /proc, so tokens reach curl through /dev/fd instead.
 #
 # devices/transfer print a single JSON object: {"ok":true,...} or
 # {"ok":false,"error":"<code>","message":"..."}, and always exit 0 so the
@@ -26,7 +31,11 @@ ACCOUNTS="https://accounts.spotify.com"
 PORT=8898
 REDIRECT="http://127.0.0.1:$PORT/callback"
 SCOPES="user-read-playback-state user-modify-playback-state"
-CACHE_DIR="${XDG_RUNTIME_DIR:-/tmp}/steveb-spotify"
+if [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ] && [ -O "$XDG_RUNTIME_DIR" ]; then
+  CACHE_DIR="$XDG_RUNTIME_DIR/omarchy-spotify"
+else
+  CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-spotify"
+fi
 CACHE="$CACHE_DIR/access.json"
 
 fail() { jq -cn --arg e "$1" --arg m "$2" '{ok:false,error:$e,message:$m}'; exit 0; }
@@ -39,9 +48,14 @@ store_refresh() {
 }
 
 cache_access() {  # $1 = token endpoint JSON
-  mkdir -p "$CACHE_DIR" && chmod 700 "$CACHE_DIR"
-  jq -c --argjson now "$(date +%s)" '{access_token, expires_at: ($now + .expires_in - 60)}' <<<"$1" \
-    | (umask 077; cat > "$CACHE")
+  # Cache only in a real directory this user owns; otherwise just refresh
+  # again next time rather than write a token somewhere shared.
+  if (umask 077; mkdir -p "$CACHE_DIR") 2>/dev/null && [ -O "$CACHE_DIR" ] && [ ! -L "$CACHE_DIR" ]; then
+    chmod 700 "$CACHE_DIR"
+    rm -f "$CACHE"
+    jq -c --argjson now "$(date +%s)" '{access_token, expires_at: ($now + .expires_in - 60)}' <<<"$1" \
+      | (umask 077; cat > "$CACHE")
+  fi
   local rotated
   rotated=$(jq -r '.refresh_token // empty' <<<"$1")
   [ -n "$rotated" ] && store_refresh "$rotated"
@@ -57,7 +71,7 @@ access_token() {
   [ -n "$cid" ] && [ -n "$rt" ] || fail no-login "Not connected to your Spotify account"
   out=$(curl -sS --max-time 15 -w '\n%{http_code}' -X POST "$ACCOUNTS/api/token" \
     --data-urlencode grant_type=refresh_token \
-    --data-urlencode "refresh_token=$rt" \
+    --data-urlencode "refresh_token@"<(printf '%s' "$rt") \
     --data-urlencode "client_id=$cid" 2>&1) || fail network "Can't reach Spotify"
   code=${out##*$'\n'}; body=${out%$'\n'*}
   case $code in
@@ -72,7 +86,7 @@ access_token() {
 # curl wrapper: sets $BODY and $CODE.
 call() {
   local out
-  out=$(curl -sS --max-time 15 -w '\n%{http_code}' -H "Authorization: Bearer $TOKEN" "$@" 2>&1) \
+  out=$(curl -sS --max-time 15 -w '\n%{http_code}' -H @<(printf 'Authorization: Bearer %s\n' "$TOKEN") "$@" 2>&1) \
     || fail network "Can't reach Spotify"
   CODE=${out##*$'\n'}
   BODY=${out%$'\n'*}
@@ -132,23 +146,36 @@ EOF
   echo "  $url"
   xdg-open "$url" >/dev/null 2>&1 &
 
-  # One-shot local server to catch the redirect. Times out after 3 minutes.
+  # Local server (127.0.0.1 only) to catch the redirect. It answers until it
+  # gets the redirect carrying our state, so a stray request (a favicon,
+  # another tab) can't end the login. Gives up after 3 minutes.
   code=$(python3 - "$PORT" "$state" <<'EOF'
-import sys, http.server, urllib.parse
+import sys, time, html, http.server, urllib.parse
 port, state = int(sys.argv[1]), sys.argv[2]
 result = {}
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        ok = q.get("state", [""])[0] == state and "code" in q
-        if ok: result["code"] = q["code"][0]
-        self.send_response(200); self.send_header("Content-Type", "text/html"); self.end_headers()
-        msg = "Spotify is connected. You can close this tab." if ok else "Spotify login failed: " + q.get("error", ["state mismatch"])[0]
-        self.wfile.write(("<p style='font:16px sans-serif'>%s</p>" % msg).encode())
+        ours = q.get("state", [""])[0] == state
+        if ours and "code" in q:
+            result["code"] = q["code"][0]
+            status, msg = 200, "Spotify is connected. You can close this tab."
+        elif ours:
+            result["done"] = True
+            status, msg = 400, "Spotify login failed: " + q.get("error", ["no code returned"])[0]
+        else:
+            status, msg = 404, "Not the Spotify login redirect."
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(("<p style='font:16px sans-serif'>%s</p>" % html.escape(msg)).encode())
     def log_message(self, *a): pass
 srv = http.server.HTTPServer(("127.0.0.1", port), H)
-srv.timeout = 180
-srv.handle_request()
+deadline = time.time() + 180
+while "code" not in result and "done" not in result and time.time() < deadline:
+    srv.timeout = max(1, deadline - time.time())
+    srv.handle_request()
 print(result.get("code", ""))
 EOF
 )
@@ -156,10 +183,10 @@ EOF
 
   out=$(curl -sS --max-time 15 -w '\n%{http_code}' -X POST "$ACCOUNTS/api/token" \
     --data-urlencode grant_type=authorization_code \
-    --data-urlencode "code=$code" \
+    --data-urlencode "code@"<(printf '%s' "$code") \
     --data-urlencode "redirect_uri=$REDIRECT" \
     --data-urlencode "client_id=$cid" \
-    --data-urlencode "code_verifier=$verifier")
+    --data-urlencode "code_verifier@"<(printf '%s' "$verifier"))
   http=${out##*$'\n'}; body=${out%$'\n'*}
   if [ "$http" != 200 ]; then
     echo "Token exchange failed ($http): $body" >&2

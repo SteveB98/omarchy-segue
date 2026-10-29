@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0 (2026-10-29)
+
+Marketplace release.
+
+- New plugin id `io.github.steveb98.spotify` (was `steveb.spotify`). If you
+  installed 1.0.0, remove it and install again; Spotify Connect stays logged in.
+- Security: Spotify tokens no longer appear in process arguments, so other
+  local users can't read them from `/proc`.
+- Security: the token cache only uses an owner-only folder, never a shared
+  `/tmp` fallback.
+- Security: the login callback page escapes Spotify's error text and ignores
+  stray requests instead of failing the login.
+- Cover art only loads from `https://` or local files.
+- `spotify-connect logout` also forgets the saved Client ID.
+- README: install Spotify from the Omarchy menu, dependencies section, new
+  screenshots with original artwork.
+
 ## 1.0.0 (2026-10-28)
 
 First public release.
