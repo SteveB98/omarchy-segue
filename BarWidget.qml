@@ -320,7 +320,12 @@ Panel {
   property string shownTitle: ""   // the title behind shownLabel, to tell a track change from a hover swap
   property bool labelSlide: false
 
-  onTargetLabelChanged: {
+  // Swap on which line is showing, not just on its text: a self-titled track
+  // ("Rosalía" by Rosalía) has identical title and artist strings, and the
+  // hover would otherwise do nothing and look broken.
+  readonly property string labelKey: (showingHoverLine ? "hover:" : "title:") + targetLabel
+
+  onLabelKeyChanged: {
     if (shownLabel === "" || !labelClip.visible) {
       labelSwap.stop()
       barText.opacity = 1

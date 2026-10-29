@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 (2026-10-29)
+
+- Bar label: hovering now fades to the artist even on self-titled tracks,
+  where the title and artist are the same text.
+- Preview image: the "g" in Segue is no longer cut off.
+
 ## 1.2.0 (2026-10-29)
 
 - The plugin is now called **Segue**, with id `io.github.steveb98.segue`.
