@@ -1,0 +1,249 @@
+#!/bin/bash
+# Spotify Connect bridge for the steveb.spotify bar widget.
+#
+#   spotify-connect setup               guided first-run (creates the app, logs in)
+#   spotify-connect login <client-id>   one-time: authorize in the browser
+#   spotify-connect devices             Connect devices + which one is active, as JSON
+#   spotify-connect transfer <deviceId> move playback to that device (and play)
+#   spotify-connect logout              forget the stored login and Client ID
+#
+# MPRIS can't see or switch Connect devices, so this goes through the Web API.
+# It needs a Spotify developer app (developer.spotify.com/dashboard) owned by a
+# Premium account, with redirect URI http://127.0.0.1:8898/callback and the
+# Web API enabled. PKCE flow: there is no client secret.
+#
+# Keyring entries (GNOME keyring via secret-tool):
+#   service spotify account steveb.spotify.client-id   the app's Client ID
+#   service spotify account steveb.spotify             the refresh token
+# The short-lived access token is cached in $XDG_RUNTIME_DIR (RAM, 0600).
+#
+# devices/transfer print a single JSON object: {"ok":true,...} or
+# {"ok":false,"error":"<code>","message":"..."}, and always exit 0 so the
+# widget only ever has to parse stdout.
+
+API="https://api.spotify.com/v1"
+ACCOUNTS="https://accounts.spotify.com"
+PORT=8898
+REDIRECT="http://127.0.0.1:$PORT/callback"
+SCOPES="user-read-playback-state user-modify-playback-state"
+CACHE_DIR="${XDG_RUNTIME_DIR:-/tmp}/steveb-spotify"
+CACHE="$CACHE_DIR/access.json"
+
+fail() { jq -cn --arg e "$1" --arg m "$2" '{ok:false,error:$e,message:$m}'; exit 0; }
+
+client_id() { secret-tool lookup service spotify account steveb.spotify.client-id 2>/dev/null; }
+refresh_token() { secret-tool lookup service spotify account steveb.spotify 2>/dev/null; }
+
+store_refresh() {
+  printf '%s' "$1" | secret-tool store --label="Spotify (bar widget)" service spotify account steveb.spotify
+}
+
+cache_access() {  # $1 = token endpoint JSON
+  mkdir -p "$CACHE_DIR" && chmod 700 "$CACHE_DIR"
+  jq -c --argjson now "$(date +%s)" '{access_token, expires_at: ($now + .expires_in - 60)}' <<<"$1" \
+    | (umask 077; cat > "$CACHE")
+  local rotated
+  rotated=$(jq -r '.refresh_token // empty' <<<"$1")
+  [ -n "$rotated" ] && store_refresh "$rotated"
+}
+
+access_token() {
+  if [ -f "$CACHE" ]; then
+    TOKEN=$(jq -r --argjson now "$(date +%s)" 'select(.expires_at > $now) | .access_token' "$CACHE" 2>/dev/null)
+    [ -n "$TOKEN" ] && return
+  fi
+  local cid rt out code body
+  cid=$(client_id); rt=$(refresh_token)
+  [ -n "$cid" ] && [ -n "$rt" ] || fail no-login "Not connected to your Spotify account"
+  out=$(curl -sS --max-time 15 -w '\n%{http_code}' -X POST "$ACCOUNTS/api/token" \
+    --data-urlencode grant_type=refresh_token \
+    --data-urlencode "refresh_token=$rt" \
+    --data-urlencode "client_id=$cid" 2>&1) || fail network "Can't reach Spotify"
+  code=${out##*$'\n'}; body=${out%$'\n'*}
+  case $code in
+    200) ;;
+    400|401) fail no-login "Spotify login expired, run setup again" ;;
+    *) fail http "Spotify auth error $code" ;;
+  esac
+  cache_access "$body"
+  TOKEN=$(jq -r .access_token <<<"$body")
+}
+
+# curl wrapper: sets $BODY and $CODE.
+call() {
+  local out
+  out=$(curl -sS --max-time 15 -w '\n%{http_code}' -H "Authorization: Bearer $TOKEN" "$@" 2>&1) \
+    || fail network "Can't reach Spotify"
+  CODE=${out##*$'\n'}
+  BODY=${out%$'\n'*}
+  case $CODE in
+    2??) ;;
+    401) rm -f "$CACHE"; fail auth "Spotify rejected the login, try again" ;;
+    403) fail premium "Spotify refused: Connect control needs Premium" ;;
+    404) fail no-device "That device is no longer available" ;;
+    429) fail rate "Spotify rate limit, try again shortly" ;;
+    *) fail http "Spotify error $CODE: $(jq -r '.error.message // empty' <<<"$BODY" 2>/dev/null)" ;;
+  esac
+}
+
+devices() {
+  access_token
+  call "$API/me/player/devices"
+  jq -c '{ok:true, devices: [.devices[] | {
+      id, name, type,
+      active: .is_active,
+      restricted: .is_restricted,
+      volume: .volume_percent
+    }]}' <<<"$BODY"
+}
+
+transfer() {
+  [ -n "$1" ] || fail usage "transfer needs a device id"
+  access_token
+  call -X PUT "$API/me/player" -H 'Content-Type: application/json' \
+    --data "$(jq -cn --arg id "$1" '{device_ids:[$id], play:true}')"
+  jq -cn --arg id "$1" '{ok:true, transferred:$id}'
+}
+
+login() {
+  local cid="${1:-$(client_id)}"
+  if [ -z "$cid" ]; then
+    echo "Usage: spotify-connect login <client-id>" >&2
+    echo "Create an app at https://developer.spotify.com/dashboard with redirect URI $REDIRECT" >&2
+    exit 1
+  fi
+  printf '%s' "$cid" | secret-tool store --label="Spotify (bar widget) client id" \
+    service spotify account steveb.spotify.client-id
+
+  local verifier challenge state url code out http body
+  verifier=$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')
+  challenge=$(printf '%s' "$verifier" | openssl dgst -sha256 -binary | basenc --base64url | tr -d '=')
+  state=$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))')
+  url="$ACCOUNTS/authorize?$(python3 - "$cid" "$REDIRECT" "$SCOPES" "$challenge" "$state" <<'EOF'
+import sys, urllib.parse
+cid, redirect, scopes, challenge, state = sys.argv[1:]
+print(urllib.parse.urlencode({"client_id": cid, "response_type": "code", "redirect_uri": redirect,
+  "scope": scopes, "code_challenge_method": "S256", "code_challenge": challenge, "state": state}))
+EOF
+)"
+
+  echo "Opening Spotify in your browser to approve access..."
+  echo "If it doesn't open, visit:"
+  echo "  $url"
+  xdg-open "$url" >/dev/null 2>&1 &
+
+  # One-shot local server to catch the redirect. Times out after 3 minutes.
+  code=$(python3 - "$PORT" "$state" <<'EOF'
+import sys, http.server, urllib.parse
+port, state = int(sys.argv[1]), sys.argv[2]
+result = {}
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        ok = q.get("state", [""])[0] == state and "code" in q
+        if ok: result["code"] = q["code"][0]
+        self.send_response(200); self.send_header("Content-Type", "text/html"); self.end_headers()
+        msg = "Spotify is connected. You can close this tab." if ok else "Spotify login failed: " + q.get("error", ["state mismatch"])[0]
+        self.wfile.write(("<p style='font:16px sans-serif'>%s</p>" % msg).encode())
+    def log_message(self, *a): pass
+srv = http.server.HTTPServer(("127.0.0.1", port), H)
+srv.timeout = 180
+srv.handle_request()
+print(result.get("code", ""))
+EOF
+)
+  [ -n "$code" ] || { echo "No authorization received." >&2; exit 1; }
+
+  out=$(curl -sS --max-time 15 -w '\n%{http_code}' -X POST "$ACCOUNTS/api/token" \
+    --data-urlencode grant_type=authorization_code \
+    --data-urlencode "code=$code" \
+    --data-urlencode "redirect_uri=$REDIRECT" \
+    --data-urlencode "client_id=$cid" \
+    --data-urlencode "code_verifier=$verifier")
+  http=${out##*$'\n'}; body=${out%$'\n'*}
+  if [ "$http" != 200 ]; then
+    echo "Token exchange failed ($http): $body" >&2
+    exit 1
+  fi
+  store_refresh "$(jq -r .refresh_token <<<"$body")"
+  cache_access "$body"
+  echo "Connected. Devices Spotify can see right now:"
+  devices | jq -r '.devices[]? | "  \(if .active then "▶" else " " end) \(.name) (\(.type))"'
+}
+
+# Guided first-run: walks through creating the Spotify developer app, then
+# runs login. The widget's "Set up Spotify Connect" button opens this in a
+# floating terminal, so nobody has to find this script's path.
+setup() {
+  local say=echo
+  command -v gum >/dev/null && say="gum style --foreground 2"
+
+  echo
+  $say "Spotify Connect setup (about 2 minutes)"
+  echo
+  echo "This lets the bar widget show which device Spotify is playing on and"
+  echo "move playback to another one (phone, speaker, TV, another computer)."
+  echo
+  echo "You need:  a Spotify Premium account (Spotify requires it for this)."
+  echo
+  echo "Spotify only allows this through a free \"developer app\" that you"
+  echo "create on your own account. Nothing is published and nobody else sees it."
+  echo
+
+  if [ -n "$(refresh_token)" ]; then
+    read -r -p "You're already connected. Reconnect anyway? [y/N] " again || again=n
+    [[ $again =~ ^[Yy] ]] || { echo "Nothing to do."; return 0; }
+  fi
+
+  printf '%s' "$REDIRECT" | wl-copy 2>/dev/null && copied=" (already copied to your clipboard)"
+  read -r -p "Press Enter to open the Spotify developer dashboard in your browser... " \
+    || { echo; echo "Setup cancelled."; return 1; }
+  xdg-open "https://developer.spotify.com/dashboard/create" >/dev/null 2>&1 &
+
+  echo
+  $say "On the \"Create app\" page:"
+  echo "  1. Log in with your Spotify account if asked."
+  echo "  2. App name and description: anything, e.g. \"Omarchy bar\"."
+  echo "  3. Redirect URIs: paste this$copied and click Add:"
+  echo
+  echo "       $REDIRECT"
+  echo
+  echo "  4. If it asks which APIs or SDKs you will use, tick Web API."
+  echo "  5. Accept the terms and click Save."
+  echo "  6. On the app page, copy the Client ID (a 32-character code)."
+  echo
+  local cid
+  while :; do
+    read -r -p "Paste the Client ID here: " cid || { echo; echo "Setup cancelled."; return 1; }
+    cid=$(tr -d '<> \t\r\n' <<<"$cid")
+    [[ $cid =~ ^[0-9a-fA-F]{32}$ ]] && break
+    echo "That doesn't look like a Client ID (32 letters and digits). Try again."
+  done
+
+  echo
+  $say "Last step: approve access"
+  echo "Your browser will open a Spotify page. Click Agree."
+  echo "(If it says \"Invalid redirect URI\", check step 3 matches exactly.)"
+  echo
+  login "$cid" || return 1
+  echo
+  $say "Done. Open the Spotify widget and click the devices button."
+}
+
+# Forgive "login<id>" (no space) and a pasted "<id>" placeholder's brackets.
+if [[ $1 =~ ^login(.+)$ ]]; then set -- login "${BASH_REMATCH[1]}"; fi
+[ "$1" = login ] && set -- login "$(tr -d '<> \t' <<<"$2")"
+
+case "$1" in
+  devices) devices ;;
+  transfer) transfer "$2" ;;
+  setup) setup ;;
+  login) login "$2" ;;
+  logout)
+    secret-tool clear service spotify account steveb.spotify
+    secret-tool clear service spotify account steveb.spotify.client-id
+    rm -f "$CACHE"
+    echo "Logged out. The saved login and Client ID were removed from your keyring."
+    echo "To also cut Spotify's side, remove the app at https://www.spotify.com/account/apps/" ;;
+  *) echo "Usage: spotify-connect setup | login <client-id> | devices | transfer <deviceId> | logout" >&2; exit 1 ;;
+esac

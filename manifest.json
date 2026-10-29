@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "steveb.spotify",
+  "name": "Spotify",
+  "version": "1.0.0",
+  "author": "Steve B",
+  "license": "MIT",
+  "description": "Spotify in the Omarchy bar: song title with artist on hover, a media-player panel with cover art, seek bar and controls, and optional Spotify Connect device switching.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Spotify",
+    "description": "Spotify now playing, playback controls, and Spotify Connect device switching.",
+    "category": "Media",
+    "aliases": [
+      "spotify",
+      "music"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "maxLabelWidth": 220,
+      "brandColor": true
+    },
+    "schema": [
+      {
+        "key": "maxLabelWidth",
+        "type": "integer",
+        "label": "Bar label width (px)",
+        "min": 0,
+        "max": 600,
+        "step": 10,
+        "defaultValue": 220,
+        "description": "Widest the track label may grow in the bar. 0 shows the icon only."
+      },
+      {
+        "key": "brandColor",
+        "type": "boolean",
+        "label": "Spotify green while playing",
+        "defaultValue": true
+      }
+    ]
+  }
+}
