@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 (2026-10-29)
+
+- The plugin is now called **Segue**, with id `io.github.steveb98.segue`.
+  Spotify's developer guidelines ask that app names not include "Spotify".
+  If you installed an earlier version, remove it and install again; Spotify
+  Connect stays logged in.
+- New marketplace preview image.
+
 ## 1.1.0 (2026-10-29)
 
 Marketplace release.

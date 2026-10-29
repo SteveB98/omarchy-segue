@@ -1,10 +1,12 @@
-# Spotify for the Omarchy bar
+# Segue
 
-A Spotify widget for the [Omarchy](https://omarchy.org) top bar. It shows the song
-that's playing, opens a small media player with cover art and controls, and can
-move playback to your phone, speakers or TV with Spotify Connect.
+**Your music in the [Omarchy](https://omarchy.org) bar, one click from any device.**
 
-![The Spotify panel open under the bar, showing cover art, track details, controls and the device list](preview.png)
+Segue is an Omarchy bar plugin for Spotify. It shows the song that's playing,
+opens a small media player with cover art and controls, and moves playback to
+your phone, speakers or TV with Spotify Connect.
+
+![Segue: the player panel under the Omarchy bar, with cover art, controls and the list of devices to play on](preview.png)
 
 - **In the bar:** the Spotify icon and the song title. Hover to see the artist.
   The icon turns green while music is playing.
@@ -57,7 +59,7 @@ it. It takes about 2 minutes, and the plugin walks you through it.
    A terminal window opens with the steps.
 2. Press Enter. Your browser opens Spotify's **Create app** page. Log in if asked.
 3. Fill in the form:
-   - **App name** and **description:** anything, for example "Omarchy bar".
+   - **App name** and **description:** anything, for example "Segue".
    - **Redirect URI:** paste `http://127.0.0.1:8898/callback` (the setup already
      copied it to your clipboard) and click **Add**. It must match exactly.
    - If it asks which APIs you'll use, tick **Web API**.
@@ -74,7 +76,7 @@ saved in your system keyring and renews itself.
 Prefer the terminal? Run the same steps with:
 
 ```bash
-~/.config/omarchy/plugins/io.github.steveb98.spotify/spotify-connect setup
+~/.config/omarchy/plugins/io.github.steveb98.segue/spotify-connect setup
 ```
 
 ## Controls
@@ -100,7 +102,7 @@ Prefer the terminal? Run the same steps with:
 Two settings can be added to the widget's entry in `~/.config/omarchy/shell.json`:
 
 ```json
-{ "id": "io.github.steveb98.spotify", "maxLabelWidth": 220, "brandColor": true }
+{ "id": "io.github.steveb98.segue", "maxLabelWidth": 220, "brandColor": true }
 ```
 
 | Setting | Default | What it does |
@@ -109,13 +111,13 @@ Two settings can be added to the widget's entry in `~/.config/omarchy/shell.json
 | `brandColor` | `true` | Spotify green for the icon and progress bar while playing. Set to `false` to use your theme's colors. |
 
 To move the widget, drag it along the bar, or run
-`omarchy bar move io.github.steveb98.spotify --section left` (or `center`).
+`omarchy bar move io.github.steveb98.segue --section left` (or `center`).
 
 ## Troubleshooting
 
 **The widget doesn't show up after installing.**
 Run `omarchy restart shell`. The bar only picks up new plugins after a restart.
-If it's still missing, run `omarchy plugin enable io.github.steveb98.spotify`.
+If it's still missing, run `omarchy plugin enable io.github.steveb98.segue`.
 
 **The widget only shows a dim Spotify icon.**
 Spotify isn't running. Right-click the icon to open it.
@@ -205,8 +207,8 @@ developer app (the setup walks you through creating it).
 ## Uninstall
 
 ```bash
-~/.config/omarchy/plugins/io.github.steveb98.spotify/spotify-connect logout   # if you set up Connect
-omarchy plugin remove io.github.steveb98.spotify
+~/.config/omarchy/plugins/io.github.steveb98.segue/spotify-connect logout   # if you set up Connect
+omarchy plugin remove io.github.steveb98.segue
 ```
 
 You can also delete the developer app from the

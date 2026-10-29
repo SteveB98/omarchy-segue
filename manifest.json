@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.steveb98.spotify",
-  "name": "Spotify",
-  "version": "1.1.0",
+  "id": "io.github.steveb98.segue",
+  "name": "Segue",
+  "version": "1.2.0",
   "author": "Steve B",
   "license": "MIT",
-  "description": "Spotify in the Omarchy bar: song title with artist on hover, a media-player panel with cover art, seek bar and controls, and optional Spotify Connect device switching.",
+  "description": "Spotify in your Omarchy bar, with one-click switching between your laptop, phone, speakers and TV. Cover art, seek bar, artist on hover and a guided setup.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,10 +13,11 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Spotify",
-    "description": "Spotify now playing, playback controls, and Spotify Connect device switching.",
+    "displayName": "Segue",
+    "description": "Spotify now playing, playback controls, and one-click device switching.",
     "category": "Media",
     "aliases": [
+      "segue",
       "spotify",
       "music"
     ],

@@ -14,8 +14,8 @@ import qs.Ui
 // loudest and this widget should only ever drive Spotify.
 Panel {
   id: root
-  moduleName: "io.github.steveb98.spotify"
-  ipcTarget: "io.github.steveb98.spotify"
+  moduleName: "io.github.steveb98.segue"
+  ipcTarget: "io.github.steveb98.segue"
 
   readonly property bool vertical: bar ? bar.vertical : false
   readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal

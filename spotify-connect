@@ -1,5 +1,5 @@
 #!/bin/bash
-# Spotify Connect bridge for the io.github.steveb98.spotify bar widget.
+# Spotify Connect bridge for Segue (io.github.steveb98.segue), an Omarchy bar plugin for Spotify.
 #
 #   spotify-connect setup               guided first-run (creates the app, logs in)
 #   spotify-connect login <client-id>   one-time: authorize in the browser
@@ -44,7 +44,7 @@ client_id() { secret-tool lookup service spotify account steveb.spotify.client-i
 refresh_token() { secret-tool lookup service spotify account steveb.spotify 2>/dev/null; }
 
 store_refresh() {
-  printf '%s' "$1" | secret-tool store --label="Spotify (bar widget)" service spotify account steveb.spotify
+  printf '%s' "$1" | secret-tool store --label="Segue: Spotify login" service spotify account steveb.spotify
 }
 
 cache_access() {  # $1 = token endpoint JSON
@@ -126,7 +126,7 @@ login() {
     echo "Create an app at https://developer.spotify.com/dashboard with redirect URI $REDIRECT" >&2
     exit 1
   fi
-  printf '%s' "$cid" | secret-tool store --label="Spotify (bar widget) client id" \
+  printf '%s' "$cid" | secret-tool store --label="Segue: Spotify app Client ID" \
     service spotify account steveb.spotify.client-id
 
   local verifier challenge state url code out http body
@@ -206,7 +206,7 @@ setup() {
   command -v gum >/dev/null && say="gum style --foreground 2"
 
   echo
-  $say "Spotify Connect setup (about 2 minutes)"
+  $say "Segue: Spotify Connect setup (about 2 minutes)"
   echo
   echo "This lets the bar widget show which device Spotify is playing on and"
   echo "move playback to another one (phone, speaker, TV, another computer)."
@@ -230,7 +230,7 @@ setup() {
   echo
   $say "On the \"Create app\" page:"
   echo "  1. Log in with your Spotify account if asked."
-  echo "  2. App name and description: anything, e.g. \"Omarchy bar\"."
+  echo "  2. App name and description: anything, e.g. \"Segue\"."
   echo "  3. Redirect URIs: paste this$copied and click Add:"
   echo
   echo "       $REDIRECT"
